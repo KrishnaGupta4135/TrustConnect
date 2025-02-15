@@ -1,0 +1,25 @@
+fastapi[all]
+# redis
+# types-redis
+uvicorn
+numpy
+
+
+pydantic
+python-multipart
+
+# Database
+sqlalchemy
+psycopg2-binary
+
+# Authentication
+python-jose[cryptography]
+passlib[bcrypt]
+pyjwt
+
+# Additional utilities
+python-dotenv
+email-validator
+
+loguru
+boto3
