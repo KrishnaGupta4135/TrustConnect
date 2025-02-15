@@ -1,21 +1,23 @@
+import boto3
+import bcrypt
+import httpx
 from . import models
 from . import schemas
 from . import controller
-from fastapi import Body,Query,UploadFile ,File
+from datetime import timedelta
+from src.database import Database
 from sqlalchemy.orm import Session
+from google.oauth2 import id_token
+from loguru import logger as logging
+from fastapi import Body,UploadFile ,File
+from google.auth.transport import requests
+from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordBearer
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
-from src.utils.jwt import create_access_token, get_email_from_token,create_refresh_token
-from fastapi.security import OAuth2PasswordBearer
-from src.database import Database
+from src.config import GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET
 from fastapi import APIRouter, Depends, HTTPException,status,Request
-from sqlalchemy.exc import IntegrityError
-from loguru import logger as logging
 from src.routers.users.schemas import LoginSchema, TokenResponse
-import bcrypt
-import jwt
-from datetime import timedelta
-import boto3
+from src.utils.jwt import create_access_token, get_email_from_token,create_refresh_token
 
 # Dependency to get database session
 db_util = Database()
@@ -110,6 +112,100 @@ def login(user_credentials: LoginSchema = Body(...), db: Session = Depends(get_d
             "message": "An unexpected error occurred. Please try again later.",
             "data": None
         }
+
+@router.get("/google_login")
+async def login(request: Request):
+    try:
+        if not GOOGLE_CLIENT_ID:
+            raise ValueError("GOOGLE_CLIENT_ID is not set in environment variables")
+
+        redirect_uri = request.url_for('auth_callback')
+
+        if not redirect_uri:
+            raise ValueError("Failed to generate redirect URI")
+
+        google_auth_url = (
+            f"https://accounts.google.com/o/oauth2/auth"
+            f"?client_id={GOOGLE_CLIENT_ID}"
+            f"&redirect_uri={redirect_uri}"
+            f"&response_type=code"
+            f"&scope=openid email profile"
+        )
+
+        return RedirectResponse(url=google_auth_url)
+
+    except ValueError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="An unexpected error occurred")
+    
+
+@router.get("/callback")
+async def auth_callback(code: str, request: Request):
+    try:
+        token_request_uri = "https://oauth2.googleapis.com/token"
+        redirect_uri = "http://127.0.0.1:8000/api/users/callback"
+
+        data = {
+            'code': code,
+            'client_id': GOOGLE_CLIENT_ID,
+            'client_secret': GOOGLE_CLIENT_SECRET,
+            'redirect_uri': redirect_uri,
+            'grant_type': 'authorization_code',
+        }
+
+        logging.debug(f"Requesting token with data: {data}")
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(token_request_uri, data=data)
+            response.raise_for_status()  # Raise an error for non-200 responses
+            token_response = response.json()
+
+        logging.debug(f"Token response: {token_response}")
+
+        id_token_value = token_response.get('id_token')
+        if not id_token_value:
+            raise HTTPException(status_code=400, detail="Missing id_token in response.")
+
+        # Verify the ID token
+        try:
+            request_adapter = requests.Request()
+            id_info = id_token.verify_oauth2_token(id_token_value, request_adapter, GOOGLE_CLIENT_ID)
+            logging.debug(f"ID Token info: {id_info}")
+
+            # Extract user details
+            name = id_info.get('name', 'Unknown')
+            email = id_info.get('email', 'Unknown')
+            phone_number = id_info.get('phone_number', None)  # Google may not provide this
+            profile_path = id_info.get('picture', None)  # Profile image URL
+            role = "user"  # Default role
+
+
+            # Store user session
+            request.session['user'] = {
+                "name": name,
+                "email": email,
+                "phone_number": phone_number,
+                "role": role,
+                "profile_path": profile_path
+            }
+            
+
+            logging.debug(f"User Session: {request.session['user']}")
+
+            return RedirectResponse(url=request.url_for('welcome'))
+
+        except ValueError as e:
+            logging.error(f"Invalid ID Token: {str(e)}")
+            raise HTTPException(status_code=400, detail=f"Invalid id_token: {str(e)}")
+
+    except httpx.HTTPStatusError as e:
+        logging.error(f"HTTP Error: {e.response.status_code} - {e.response.text}")
+        raise HTTPException(status_code=e.response.status_code, detail=f"OAuth2 Token Request Failed: {e.response.text}")
+
+    except Exception as e:
+        logging.error(f"Unexpected Error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
 @router.get("/info", response_model=schemas.UserResponse)

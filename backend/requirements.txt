@@ -16,6 +16,8 @@ psycopg2-binary
 python-jose[cryptography]
 passlib[bcrypt]
 pyjwt
+Authlib==1.3.2
+
 
 # Additional utilities
 python-dotenv
@@ -23,3 +25,11 @@ email-validator
 
 loguru
 boto3
+
+# For Google Auth
+google-auth==2.35.0
+websockets==13.1
+cryptography==43.0.1
+
+httpx==0.27.2
+urllib3==2.2.3
