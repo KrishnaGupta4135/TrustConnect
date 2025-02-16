@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 import enum
 
@@ -105,3 +105,65 @@ class ForgotPasswordSchema(BaseModel):
 class ResetPasswordSchema(BaseModel):
     token: str
     new_password: str
+
+
+
+# Email related schemas
+class EmailSchema(BaseModel):
+    """Base schema for email data"""
+    email: List[EmailStr]
+    body: dict
+
+class EmailTemplateSchema(BaseModel):
+    """Schema for email template data"""
+    subject: str
+    template_name: str
+    template_body: dict
+
+class WelcomeEmailSchema(EmailTemplateSchema):
+    """Schema specifically for welcome emails"""
+    class Config:
+        schema_extra = {
+            "example": {
+                "subject": "Welcome to Our Platform!",
+                "template_name": "welcome.html",
+                "template_body": {
+                    "name": "John Doe",
+                    "email": "john@example.com"
+                }
+            }
+        }
+
+class PasswordResetEmailSchema(EmailTemplateSchema):
+    """Schema for password reset emails"""
+    class Config:
+        schema_extra = {
+            "example": {
+                "subject": "Password Reset Request",
+                "template_name": "password_reset.html",
+                "template_body": {
+                    "name": "John Doe",
+                    "reset_link": "https://yourapp.com/reset-password?token=xyz"
+                }
+            }
+        }
+
+class EmailResponseSchema(BaseModel):
+    """Schema for email sending response"""
+    success: bool
+    status: int
+    message: str
+    details: Optional[dict] = None
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "success": True,
+                "status": 200,
+                "message": "Email sent successfully",
+                "details": {
+                    "email": "user@example.com",
+                    "template": "welcome.html"
+                }
+            }
+        }

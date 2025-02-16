@@ -23,3 +23,8 @@ email-validator
 
 loguru
 boto3
+
+
+fastapi-mail 
+python-multipart 
+jinja2
