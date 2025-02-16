@@ -1,7 +1,7 @@
 from . import models
 from . import schemas
 from . import controller
-from fastapi import Body,Query,UploadFile ,File
+from fastapi import Body,Query,UploadFile ,File,BackgroundTasks
 from sqlalchemy.orm import Session
 from fastapi.security import OAuth2PasswordBearer
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
@@ -16,6 +16,46 @@ import bcrypt
 import jwt
 from datetime import timedelta
 import boto3
+
+from fastapi_mail import FastMail, MessageSchema, MessageType
+from src.config import (
+    MAIL_USERNAME, MAIL_PASSWORD, MAIL_FROM,
+    MAIL_PORT, MAIL_SERVER, MAIL_STARTTLS,
+    MAIL_SSL_TLS, USE_CREDENTIALS
+)
+from fastapi_mail import ConnectionConfig
+
+conf = ConnectionConfig(
+    MAIL_USERNAME=MAIL_USERNAME,
+    MAIL_PASSWORD=MAIL_PASSWORD,
+    MAIL_FROM=MAIL_FROM,
+    MAIL_PORT=MAIL_PORT,
+    MAIL_SERVER=MAIL_SERVER,
+    MAIL_STARTTLS=MAIL_STARTTLS,
+    MAIL_SSL_TLS=MAIL_SSL_TLS,
+    USE_CREDENTIALS=USE_CREDENTIALS,
+    TEMPLATE_FOLDER='src/email/templates'
+)
+
+async def send_welcome_email(user_name: str, user_email: str):
+    """Send welcome email to newly registered user"""
+    try:
+        message = MessageSchema(
+            subject="Welcome to Our Platform!",
+            recipients=[user_email],
+            template_body={
+                "name": user_name,
+                "email": user_email
+            },
+            subtype=MessageType.html
+        )
+
+        fm = FastMail(conf)
+        await fm.send_message(message, template_name="welcome.html")
+        logging.info(f"Welcome email sent successfully to {user_email}")
+    except Exception as e:
+        logging.error(f"Failed to send welcome email to {user_email}: {str(e)}")
+
 
 # Dependency to get database session
 db_util = Database()
@@ -193,7 +233,7 @@ def get_user_info(request: Request, db: Session = Depends(get_db)):
 
     
 @router.post("/create", status_code=201)
-def create_user(user: schemas.CreateUserSchema, db: Session = Depends(get_db)):
+def create_user(user: schemas.CreateUserSchema, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """
     Endpoint to create a new user.
     """
@@ -256,6 +296,13 @@ def create_user(user: schemas.CreateUserSchema, db: Session = Depends(get_db)):
 
         # Generate the JWT token for the user
         access_token = create_access_token(data={"sub": new_user.email})
+
+        # Schedule welcome email to be sent in the background
+        background_tasks.add_task(
+            send_welcome_email,
+            user_name=new_user.name,
+            user_email=new_user.email
+        )
 
         # Return the structured response
         logging.info(f"User {new_user.email} created successfully with role 'user'")
