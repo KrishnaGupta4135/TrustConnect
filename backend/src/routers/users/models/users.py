@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Enum, TIMESTAMP
+from sqlalchemy import Column, Integer, String, DateTime, Enum, TIMESTAMP, ForeignKey
 from sqlalchemy.orm import validates, relationship
 from sqlalchemy.sql import func
 from sqlalchemy.ext.declarative import declarative_base
@@ -7,6 +7,21 @@ import re
 import bcrypt
 
 Base = declarative_base()
+
+class OTPStatus(str, enum.Enum):
+    pending = "pending"
+    verified = "verified"
+    expired = "expired"
+
+class OTPVerification(Base):
+    __tablename__ = "otp_verifications"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    otp_code = Column(String(6), nullable=False)
+    status = Column(Enum(OTPStatus), default=OTPStatus.pending)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    expires_at = Column(DateTime(timezone=True), nullable=False)
 
 class UserRole(enum.Enum):
     admin = "admin"

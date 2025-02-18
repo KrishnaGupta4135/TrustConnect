@@ -11,7 +11,10 @@ from .config import (
     MAIL_SERVER,
     MAIL_STARTTLS,
     MAIL_SSL_TLS,
-    USE_CREDENTIALS
+    USE_CREDENTIALS,
+    GOOGLE_CLIENT_ID,
+    GOOGLE_CLIENT_SECRET,
+    
 )
 
 __all__ = [
@@ -27,5 +30,7 @@ __all__ = [
     "MAIL_SERVER",
     "MAIL_STARTTLS",
     "MAIL_SSL_TLS",
-    "USE_CREDENTIALS"
+    "USE_CREDENTIALS",
+    "GOOGLE_CLIENT_ID",
+    "GOOGLE_CLIENT_SECRET"
 ]

@@ -13,7 +13,11 @@ from .users import (
     ChangePasswordSchema,
     ForgotPasswordSchema,
     ResetPasswordSchema,
-    UserProfilePathResponse
+    UserProfilePathResponse,
+    OTPVerificationRequest,
+    OTPResponse,
+    LoginResponseData,
+    TokenResponseData
 )
 
 
@@ -32,5 +36,10 @@ __all__ =[
     "ChangePasswordSchema",
     "ForgotPasswordSchema",
     "ResetPasswordSchema",
-    "UserProfilePathResponse"
+    "UserProfilePathResponse",
+    "OTPVerificationRequest",
+    "OTPResponse",
+    "LoginResponseData",
+    "TokenResponseData"
+
 ]

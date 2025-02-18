@@ -5,6 +5,11 @@ from fastapi.middleware.cors import CORSMiddleware
 # from src.routers import users_router, qna_router, feedback_router,dashboard_route
 from src.routers import users_router
 from src.config import APPNAME, VERSION
+from starlette.middleware.sessions import SessionMiddleware
+import os
+from dotenv import load_dotenv
+load_dotenv()
+
 
 # Defining the application
 app = FastAPI(
@@ -28,6 +33,8 @@ app.add_middleware(
     allow_methods=["*"],  # Allow all HTTP methods
     allow_headers=["*"],  # Allow all headers
 )
+
+app.add_middleware(SessionMiddleware, secret_key=os.getenv("SECRET_KEY", "default_secret_key"))
 
 # Including all the routes for the 'users' module
 app.include_router(users_router)

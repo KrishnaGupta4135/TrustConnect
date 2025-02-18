@@ -17,3 +17,7 @@ MAIL_SERVER = os.getenv("MAIL_SERVER", "smtp.gmail.com")
 MAIL_STARTTLS = True
 MAIL_SSL_TLS = False
 USE_CREDENTIALS = True
+
+# Google Auth Cred
+GOOGLE_CLIENT_ID = os.environ["GOOGLE_CLIENT_ID"]
+GOOGLE_CLIENT_SECRET = os.environ['GOOGLE_CLIENT_SECRET']

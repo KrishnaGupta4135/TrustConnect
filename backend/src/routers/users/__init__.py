@@ -12,7 +12,9 @@ from .schemas import (
     UserData,
     ChangePasswordSchema,
     ForgotPasswordSchema,
-    ResetPasswordSchema
+    ResetPasswordSchema,
+    OTPVerificationRequest,
+    OTPResponse,
 )
 
 __all__ = [
@@ -30,5 +32,7 @@ __all__ = [
     "ChangePasswordSchema",
     "ForgotPasswordSchema",
     "ResetPasswordSchema",
-    "router"
+    "router",
+    "OTPVerificationRequest",
+    "OTPResponse"
 ]

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../services/account";
+import GoogleLoginButton from "../components/GoogleLoginButton";
 
 const Create = () => {
   const [userData, setUserData] = useState({
@@ -113,15 +114,34 @@ const Create = () => {
           >
             {loading ? "Creating Account..." : "Sign Up"}
           </button>
-          <div className="text-center mt-4">
+          {/* <div className="text-center mt-4">
             <p className="text-sm">
               Already have an account?{" "}
               <Link to="/login" className="text-blue-500 hover:underline">
                 Login
               </Link>
             </p>
-          </div>
+          </div> */}
         </form>
+        <div className="mt-6 relative">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-gray-300"></div>
+          </div>
+          <div className="relative flex justify-center text-sm">
+            <span className="px-2 bg-white text-gray-500">Or</span>
+          </div>
+        </div>
+
+        <GoogleLoginButton />
+
+        <div className="text-center mt-4">
+          <p className="text-sm text-gray-600">
+            Already have an account?{" "}
+            <Link to="/login" className="text-blue-500 hover:underline">
+              Login
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   );

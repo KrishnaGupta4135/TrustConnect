@@ -4,6 +4,7 @@ import "./App.css";
 import Login from "./pages/Login";
 import Create from "./pages/Create";
 import Home from "./pages/Home";
+import GoogleCallback from "./components/GoogleCallback";
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/create" element={<Create />} />
             <Route path="/" element={<Home />}></Route>
+            <Route path="/callback" element={<GoogleCallback />} />
           </Routes>
         </div>
 
