@@ -80,10 +80,15 @@ export const useAuth = () => {
     try {
       setLoading(true);
       setError(null);
-      await loginUser(credentials);
-      navigate("/dashboard"); // Redirect to dashboard after successful login
+      const response = await fetch(`${API_URL}/api/users/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(credentials),
+      });
+      const data = await response.json();
+      return data; // Return the response so we can check for OTP requirement
     } catch (err) {
-      setError(err.message);
+      setError("An error occurred during login");
     } finally {
       setLoading(false);
     }

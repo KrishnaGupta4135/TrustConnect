@@ -4,6 +4,8 @@ from datetime import datetime
 import enum
 
 
+
+    
 # Enum for user status
 class UserStatus(str, enum.Enum):
     active = "active"
@@ -58,12 +60,33 @@ class LoginSchema(BaseModel):
     password : str
 
 
+class OTPVerificationRequest(BaseModel):
+    email: EmailStr
+    otp_code: str
+
+class OTPResponse(BaseModel):
+    message: str
+    expires_at: datetime
+
+
 class TokenResponse(BaseModel):
     success: bool
     status: int
     isActive: bool
     message: str
     data: Optional[dict]  # Data can be None or a dictionary
+
+# Define a specific data model for login response
+class LoginResponseData(BaseModel):
+    email: str
+    requires_otp: bool
+
+# Define a specific data model for token response
+class TokenResponseData(BaseModel):
+    email: str
+    access_token: str
+    refresh_token: str
+    token_type: str
     
 class UserData(BaseModel):
     id: int

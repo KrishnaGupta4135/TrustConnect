@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <style>
+      .container {
+        font-family: Arial, sans-serif;
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      .otp-code {
+        font-size: 24px;
+        font-weight: bold;
+        color: #1a73e8;
+        padding: 10px;
+        margin: 20px 0;
+        text-align: center;
+      }
+      .expires {
+        color: #666;
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2>Your Login Verification Code</h2>
+      <p>Please use the following code to complete your login:</p>
+      <div class="otp-code">{{otp}}</div>
+      <p class="expires">This code will expire in {{expires_in}}.</p>
+      <p>If you didn't request this code, please ignore this email.</p>
+    </div>
+  </body>
+</html>

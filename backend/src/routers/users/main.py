@@ -11,11 +11,21 @@ from src.database import Database
 from fastapi import APIRouter, Depends, HTTPException,status,Request
 from sqlalchemy.exc import IntegrityError
 from loguru import logger as logging
-from src.routers.users.schemas import LoginSchema, TokenResponse
+from src.routers.users.schemas import LoginSchema, TokenResponse,OTPVerificationRequest
 import bcrypt
 import jwt
-from datetime import timedelta
+from datetime import datetime,timedelta
 import boto3
+from src.config import GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET
+from google.auth.transport import requests
+from google.oauth2 import id_token
+import httpx
+from fastapi.responses import RedirectResponse
+
+
+import random
+import string
+
 
 from fastapi_mail import FastMail, MessageSchema, MessageType
 from src.config import (
@@ -56,6 +66,26 @@ async def send_welcome_email(user_name: str, user_email: str):
     except Exception as e:
         logging.error(f"Failed to send welcome email to {user_email}: {str(e)}")
 
+async def send_otp_email(email: str, otp: str):
+    """Send OTP email to user"""
+    try:
+        message = MessageSchema(
+            subject="Your Login OTP",
+            recipients=[email],
+            template_body={
+                "otp": otp,
+                "expires_in": "10 minutes"
+            },
+            subtype=MessageType.html,
+            template_name="otp_email.html"
+        )
+
+        fm = FastMail(conf)
+        await fm.send_message(message, template_name="otp_email.html")
+        logging.info(f"OTP email sent successfully to {email}")
+    except Exception as e:
+        logging.error(f"Failed to send OTP email: {str(e)}")
+        raise
 
 # Dependency to get database session
 db_util = Database()
@@ -79,7 +109,7 @@ router = APIRouter(
 )
 
 @router.post("/login", response_model=TokenResponse)
-def login(user_credentials: LoginSchema = Body(...), db: Session = Depends(get_db)):
+async def login(user_credentials: LoginSchema = Body(...), db: Session = Depends(get_db)):
     """
     Login endpoint for users to authenticate and obtain both an access token and a refresh token.
     """
@@ -89,68 +119,217 @@ def login(user_credentials: LoginSchema = Body(...), db: Session = Depends(get_d
         # Log the email for debugging (avoid logging plaintext passwords in production)
         logging.info(f"Login attempt for email: {user_credentials.email}")
 
-        # Fetch the user by email
-        user = db.query(models.User.id, models.User.email, models.User.password).filter(
+        # Validate credentials
+        
+        user = db.query(models.User).filter(
             models.User.email == user_credentials.email
         ).first()
 
-        # Log the query result for debugging
-        if user:
-            logging.debug(f"User found: {user.email}")
-        else:
-            logging.warning(f"Login failed: User with email {user_credentials.email} not found")
-
-        # If the user does not exist in the database
-        if not user:
+        if not user or not verify_password(user_credentials.password, user.password):
             return {
                 "success": False,
                 "status": 401,
-                "isActive": False,
-                "message": "The email you entered does not match any account. Please check and try again.",
-                "data": None  # No user data to include
-            }
-
-        # Verify the provided password against the stored hashed password
-        if not verify_password(user_credentials.password, user.password):
-            logging.warning(f"Login failed: Incorrect password for email {user_credentials.email}")
-            return {
-                "success": False,
-                "status": 401,
-                "isActive": False,
-                "message": "The password you entered is incorrect. Please try again.",
+                "message": "Invalid credentials",
                 "data": None
             }
 
-        # Create both access and refresh tokens
-        access_token = create_access_token(data={"sub": user.email})
-        refresh_token = create_refresh_token(data={"sub": user.email})
+        # Generate OTP
+        otp = ''.join(random.choices(string.digits, k=6))
+        expires_at = datetime.utcnow() + timedelta(minutes=10)
 
-        # Return the structured success response
-        logging.info(f"User {user.email} logged in successfully")
+        # Clear any existing unverified OTPs for this user
+        db.query(models.OTPVerification).filter(
+            models.OTPVerification.user_id == user.id,
+            models.OTPVerification.status == "pending"
+        ).delete()
+
+        # Create new OTP record
+        otp_verification = models.OTPVerification(
+            user_id=user.id,
+            otp_code=otp,
+            expires_at=expires_at
+        )
+        db.add(otp_verification)
+        db.commit()
+
+        # Send OTP email
+        await send_otp_email(user.email, otp)
+
         return {
             "success": True,
             "status": 200,
-            "isActive": True,
-            "message": "Login successful. Welcome back!",
+             "isActive": True,  # Add this field
+            "message": "OTP sent to your email",
             "data": {
-                "email_id": user.email,
-                "access_token": access_token,
-                "refresh_token": refresh_token,  # Add refresh token
-                "token_type": "bearer",
+                "email": user.email,
+                "requires_otp": True
             }
         }
 
     except Exception as e:
-        # Handle unexpected errors
-        logging.error(f"An error occurred during login: {e}")
+        logging.error(f"Login error: {e}")
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="An error occurred during login"
+        )
+
+@router.post("/verify-otp", response_model=TokenResponse)
+async def verify_otp(
+    verification: OTPVerificationRequest,
+    db: Session = Depends(get_db)
+):
+    try:
+        user = db.query(models.User).filter(
+            models.User.email == verification.email
+        ).first()
+
+        if not user:
+            return {
+                "success": False,
+                "status": 404,
+                "message": "User not found",
+                "data": None
+            }
+
+        # Get latest unverified OTP
+        otp_record = db.query(models.OTPVerification).filter(
+            models.OTPVerification.user_id == user.id,
+            models.OTPVerification.status == models.OTPStatus.pending,
+            models.OTPVerification.expires_at > datetime.utcnow()
+        ).order_by(models.OTPVerification.created_at.desc()).first()
+
+        if not otp_record or otp_record.otp_code != verification.otp_code:
+            return {
+                "success": False,
+                "status": 401,
+                "message": "Invalid or expired OTP",
+                "data": None
+            }
+
+        # Mark OTP as verified
+        otp_record.status = models.OTPStatus.verified
+        db.commit()
+
+
+        # Generate tokens
+        access_token = create_access_token(data={"sub": user.email})
+        refresh_token = create_refresh_token(data={"sub": user.email})
+
         return {
-            "success": False,
-            "status": 500,
-            "isActive": False,
-            "message": "An unexpected error occurred. Please try again later.",
-            "data": None
+            "success": True,
+            "status": 200,
+            "isActive": True, 
+            "message": "Login successful",
+            "data": {
+                "email": user.email,
+                "access_token": access_token,
+                "refresh_token": refresh_token,
+                "token_type": "bearer"
+            }
         }
 
+    except Exception as e:
+        logging.error(f"OTP verification error: {e}")
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="An error occurred during OTP verification"
+        )
+
+@router.get("/google_login")
+async def login(request: Request):
+    try:
+        if not GOOGLE_CLIENT_ID:
+            raise ValueError("GOOGLE_CLIENT_ID is not set in environment variables")
+
+        redirect_uri = request.url_for('auth_callback')
+
+        if not redirect_uri:
+            raise ValueError("Failed to generate redirect URI")
+
+        google_auth_url = (
+            f"https://accounts.google.com/o/oauth2/auth"
+            f"?client_id={GOOGLE_CLIENT_ID}"
+            f"&redirect_uri={redirect_uri}"
+            f"&response_type=code"
+            f"&scope=openid email profile"
+        )
+
+        return RedirectResponse(url=google_auth_url)
+
+    except ValueError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="An unexpected error occurred")
+    
+
+@router.get("/callback")
+async def auth_callback(code: str, request: Request):
+    try:
+        token_request_uri = "https://oauth2.googleapis.com/token"
+        redirect_uri = "http://localhost:5001/api/users/callback"
+
+        data = {
+            'code': code,
+            'client_id': GOOGLE_CLIENT_ID,
+            'client_secret': GOOGLE_CLIENT_SECRET,
+            'redirect_uri': redirect_uri,
+            'grant_type': 'authorization_code',
+        }
+
+        logging.debug(f"Requesting token with data: {data}")
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(token_request_uri, data=data)
+            response.raise_for_status()  # Raise an error for non-200 responses
+            token_response = response.json()
+
+        logging.debug(f"Token response: {token_response}")
+
+        id_token_value = token_response.get('id_token')
+        if not id_token_value:
+            raise HTTPException(status_code=400, detail="Missing id_token in response.")
+
+        # Verify the ID token
+        try:
+            request_adapter = requests.Request()
+            id_info = id_token.verify_oauth2_token(id_token_value, request_adapter, GOOGLE_CLIENT_ID)
+            logging.debug(f"ID Token info: {id_info}")
+
+            # Extract user details
+            name = id_info.get('name', 'Unknown')
+            email = id_info.get('email', 'Unknown')
+            phone_number = id_info.get('phone_number', None)  # Google may not provide this
+            profile_path = id_info.get('picture', None)  # Profile image URL
+            role = "user"  # Default role
+
+
+            # Store user session
+            request.session['user'] = {
+                "name": name,
+                "email": email,
+                "phone_number": phone_number,
+                "role": role,
+                "profile_path": profile_path
+            }
+            
+
+            logging.debug(f"User Session: {request.session['user']}")
+
+            return RedirectResponse(url='http://localhost:5173/dashboard')
+
+        except ValueError as e:
+            logging.error(f"Invalid ID Token: {str(e)}")
+            raise HTTPException(status_code=400, detail=f"Invalid id_token: {str(e)}")
+
+    except httpx.HTTPStatusError as e:
+        logging.error(f"HTTP Error: {e.response.status_code} - {e.response.text}")
+        raise HTTPException(status_code=e.response.status_code, detail=f"OAuth2 Token Request Failed: {e.response.text}")
+
+    except Exception as e:
+        logging.error(f"Unexpected Error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
 
 @router.get("/info", response_model=schemas.UserResponse)
 def get_user_info(request: Request, db: Session = Depends(get_db)):
