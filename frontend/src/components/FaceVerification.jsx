@@ -175,7 +175,7 @@ const FaceVerification = () => {
     }, [formData.image, handleCameraStart, handleCameraStop, uiState.stream]);
 
     return (
-        <div className="flex flex-col w-full min-h-screen bg-gray-900">
+        <div className="flex flex-col sm:flex-row w-full min-h-screen bg-gray-900">
             {/* Left side - Branding and Information */}
             <div className="w-full p-6 flex flex-col items-center text-white">
                 <div className="max-w-lg">
@@ -187,6 +187,10 @@ const FaceVerification = () => {
                     <img
                         src={img}
                         alt="Face Recognition Technology"
+                        style={{
+                            height: '60%',
+                            width: '190%',
+                        }}
                         className="w-full rounded-lg shadow-lg mb-6"
                     />
 
