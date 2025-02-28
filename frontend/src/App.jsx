@@ -7,6 +7,7 @@ import Home from "./pages/Home";
 import GoogleCallback from "./components/GoogleCallback";
 import FaceVerification from "./components/FaceVerification";
 import Dashboard from "./pages/User/Dashboard";
+import Chat from "./pages/Chat";
 
 function App() {
   return (
@@ -23,6 +24,7 @@ function App() {
             <Route path="/callback" element={<GoogleCallback />} />
             <Route path="face" element ={<FaceVerification/>} />
             <Route path="dashboard" element={<Dashboard/>}/>
+            <Route path="/chat" element={<Chat/>} />
           </Routes>
         </div>
 
